@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+	<string name="app_name">Splash Activity</string>
+	<string name="action_settings">Settings</string>
+	<string name="title_activity_home">Home Activity</string>
+	<string name="splash_activity_text">Splash activity text</string>
+	<string name="button_play">Play</string>
+	<string name="black_image_desc">Black square</string>
+
+</resources>
