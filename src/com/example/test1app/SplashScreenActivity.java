@@ -10,15 +10,25 @@ import android.view.View;
 import android.view.View.OnClickListener;
 
 public class SplashScreenActivity extends ActionBarActivity {
-	private final Handler handler = new Handler();
-	private Runnable changeActivity = null;
+	private static final String GLOBAL_END = "global_end";
+	private static final long DELAY_TIME = 20000L;
+
+	private long globalEnd = Long.MIN_VALUE;
+	private Handler handler;
+	private Runnable changeActivity;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_splash_screen);
 
-		View layout = findViewById(R.id.splashlayout);
+		if (savedInstanceState == null) {
+			globalEnd = System.currentTimeMillis() + DELAY_TIME;
+		} else {
+			globalEnd = savedInstanceState.getLong(GLOBAL_END);
+		}
+
+		View layout = findViewById(R.id.splash_layout);
 		layout.setOnClickListener(new OnClickListener() {
 
 			@Override
@@ -37,8 +47,14 @@ public class SplashScreenActivity extends ActionBarActivity {
 
 		};
 
-		handler.postDelayed(changeActivity, 10000L);
-		//TODO change delay time to 2000 ms
+		long delay = globalEnd - System.currentTimeMillis();
+
+		if (delay < 0L) {
+			delay = 0L;
+		}
+
+		handler = new Handler();
+		handler.postDelayed(changeActivity, delay);
 	}
 
 	@Override
@@ -56,8 +72,27 @@ public class SplashScreenActivity extends ActionBarActivity {
 		return super.onOptionsItemSelected(item);
 	}
 
-	private void changeActivity() {
+	@Override
+	public void onStop() {
+		super.onStop();
 		handler.removeCallbacks(changeActivity);
+		handler = null;
+		changeActivity = null;
+	}
+
+	@Override
+	public void onSaveInstanceState(Bundle savedInstanceState) {
+		super.onSaveInstanceState(savedInstanceState);
+
+		if (!savedInstanceState.containsKey(GLOBAL_END)) {
+			savedInstanceState.putLong(GLOBAL_END, globalEnd);
+		}
+	}
+
+	private void changeActivity() {
+		if (handler != null) {
+			handler.removeCallbacks(changeActivity);
+		}
 
 		Intent intent = new Intent(this, HomeActivity.class);
 		startActivity(intent);

@@ -392,7 +392,7 @@ int id shortcut 0x7f05002c
 int id showCustom 0x7f050009
 int id showHome 0x7f050006
 int id showTitle 0x7f050008
-int id splashlayout 0x7f050041
+int id splash_layout 0x7f050041
 int id split_action_bar 0x7f05001b
 int id submit_area 0x7f05003e
 int id tabMode 0x7f050003

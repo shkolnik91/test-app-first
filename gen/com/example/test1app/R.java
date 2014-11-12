@@ -1694,7 +1694,7 @@ containing a value of this type.
         public static final int showCustom=0x7f050009;
         public static final int showHome=0x7f050006;
         public static final int showTitle=0x7f050008;
-        public static final int splashlayout=0x7f050041;
+        public static final int splash_layout=0x7f050041;
         public static final int split_action_bar=0x7f05001b;
         public static final int submit_area=0x7f05003e;
         public static final int tabMode=0x7f050003;
