@@ -11,7 +11,7 @@ import android.view.View.OnClickListener;
 
 public class SplashScreenActivity extends ActionBarActivity {
 	private static final String GLOBAL_END = "global_end";
-	private static final long DELAY_TIME = 20000L;
+	private static final long DELAY_TIME = 2000L;
 
 	private long globalEnd = Long.MIN_VALUE;
 	private Handler handler;
