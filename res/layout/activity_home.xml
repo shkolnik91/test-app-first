@@ -12,17 +12,19 @@
 	tools:context="com.example.test1app.HomeActivity" >
 
 	<TextView
+		android:id="@+id/text_view"
 		android:layout_width="wrap_content"
 		android:layout_height="wrap_content"
 		android:layout_marginTop="@dimen/activity_vertical_margin"
-		android:layout_weight="0.5"
-		android:text="@string/title_activity_home" />
+		android:layout_weight="0.5"/>
 
 	<Button
+		android:id="@+id/play_button"
 		android:layout_width="wrap_content"
 		android:layout_height="wrap_content"
 		android:layout_marginBottom="@dimen/activity_vertical_margin"
 		android:layout_marginTop="@dimen/activity_vertical_margin"
+		android:clickable="false"
 		android:text="@string/button_play" />
 
 </LinearLayout>

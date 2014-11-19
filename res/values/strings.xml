@@ -6,6 +6,11 @@
 	<string name="title_activity_home">Home Activity</string>
 	<string name="splash_activity_text">Splash activity text</string>
 	<string name="button_play">Play</string>
+	<string name="button_pause">Pause</string>
 	<string name="black_image_desc">Black square</string>
+	<string name="home_idle">Idle</string>
+	<string name="home_downloading">Downloading</string>
+	<string name="home_playing">Playing</string>
+	<string name="home_url">https://upload.wikimedia.org/wikipedia/commons/f/f5/Russian_Anthem_Instrumental.ogg</string>
 
 </resources>

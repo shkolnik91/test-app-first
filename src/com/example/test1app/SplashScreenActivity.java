@@ -1,17 +1,17 @@
 package com.example.test1app;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.v7.app.ActionBarActivity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 
-public class SplashScreenActivity extends ActionBarActivity {
+public class SplashScreenActivity extends Activity {
 	private static final String GLOBAL_END = "global_end";
-	private static final long DELAY_TIME = 2000L;
+	private static final long DELAY_TIME = 20000L;
 
 	private long globalEnd = Long.MIN_VALUE;
 	private Handler handler;
@@ -53,7 +53,10 @@ public class SplashScreenActivity extends ActionBarActivity {
 			delay = 0L;
 		}
 
-		handler = new Handler();
+		handler = new Handler() {
+			@SuppressWarnings("unused")
+			private static final boolean FIND_POTENTIAL_LEAKS = true;
+		};
 		handler.postDelayed(changeActivity, delay);
 	}
 
@@ -76,17 +79,14 @@ public class SplashScreenActivity extends ActionBarActivity {
 	public void onStop() {
 		super.onStop();
 		handler.removeCallbacks(changeActivity);
-		handler = null;
-		changeActivity = null;
+
 	}
 
 	@Override
 	public void onSaveInstanceState(Bundle savedInstanceState) {
 		super.onSaveInstanceState(savedInstanceState);
 
-		if (!savedInstanceState.containsKey(GLOBAL_END)) {
-			savedInstanceState.putLong(GLOBAL_END, globalEnd);
-		}
+		savedInstanceState.putLong(GLOBAL_END, globalEnd);
 	}
 
 	private void changeActivity() {
