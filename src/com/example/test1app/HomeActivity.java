@@ -10,9 +10,12 @@ import java.net.MalformedURLException;
 import java.net.URL;
 
 import android.app.Activity;
+import android.app.Dialog;
 import android.app.ProgressDialog;
+import android.content.DialogInterface;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnCompletionListener;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
@@ -24,12 +27,17 @@ import android.widget.Button;
 import android.widget.TextView;
 
 public class HomeActivity extends Activity {
-	private static String path;
-	private ProgressDialog dialog;
+	private static final int DIALOG_ID = 123;
+	private static final String PATH = "path";
+	private static final String PLAYER_STARTED = "player_started";
+	private static final String TASK_CANCELLED = "task_cancelled";
+
+	private String path;
 	private DownloadTask downloadTask;
 	private PlaybackTask playbackTask;
-	private static MediaPlayer mediaPlayer;
-	private static boolean mediaPlayerStarted = false;
+	private MediaPlayer mediaPlayer;
+	private boolean mediaPlayerStarted;
+	private boolean wasCancelled;
 	private Button button;
 	private TextView label;
 
@@ -38,13 +46,45 @@ public class HomeActivity extends Activity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_home);
 
+		if (savedInstanceState != null) {
+			mediaPlayerStarted = savedInstanceState.getBoolean(PLAYER_STARTED);
+			wasCancelled = savedInstanceState.getBoolean(TASK_CANCELLED);
+			path = savedInstanceState.getString(PATH);
+		}
+
 		button = (Button) findViewById(R.id.play_button);
 		label = (TextView) findViewById(R.id.text_view);
 		label.setText(R.string.home_idle);
 
-		if (mediaPlayer == null) {
+		Object instance = getLastNonConfigurationInstance();
+
+		if (instance instanceof InstanceObjects) {
+			downloadTask = ((InstanceObjects) instance).getDownloadTask();
+			playbackTask = ((InstanceObjects) instance).getPlaybackTask();
+			mediaPlayer = ((InstanceObjects) instance).getMediaPlayer();
+		}
+
+		if (downloadTask == null) {
+			downloadTask = new DownloadTask(this);
+			downloadTask.execute(getResources().getText(R.string.home_url).toString());
+		} else {
+			downloadTask.setActivity(this);
+		}
+
+		if (AsyncTask.Status.FINISHED.equals(downloadTask.getStatus())) {
+			label.setText(R.string.home_idle);
+			button.setClickable(true);
+			button.setEnabled(true);
+		} else {
+			button.setClickable(false);
+			button.setEnabled(false);
+			label.setText(R.string.home_downloading);
+		}
+
+		if ((mediaPlayer == null) || (!mediaPlayerStarted)) {
 			mediaPlayer = new MediaPlayer();
 			mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+
 		} else {
 			if (mediaPlayer.isPlaying()) {
 				label.setText(R.string.home_playing);
@@ -52,7 +92,14 @@ public class HomeActivity extends Activity {
 			}
 		}
 
-		createOrRestoreDownloadTask();
+		mediaPlayer.setOnCompletionListener(new OnCompletionListener() {
+			@Override
+			public void onCompletion(MediaPlayer mp) {
+				label.setText(R.string.home_idle);
+				button.setText(R.string.button_play);
+				mediaPlayerStarted = false;
+			}
+		});
 
 		button.setOnClickListener(new OnClickListener() {
 
@@ -61,40 +108,37 @@ public class HomeActivity extends Activity {
 				if (v.isEnabled()) {
 					HomeActivity.this.onClick();
 				}
-
 			}
 
 		});
 	}
 
-	private void createOrRestoreDownloadTask() {
-		Object instance = getLastNonConfigurationInstance();
-
-		dialog = new ProgressDialog(this);
-		if ((instance != null) && (instance instanceof DownloadTask)) {
-			downloadTask = (DownloadTask) instance;
-			downloadTask.setDialog(dialog);
-			downloadTask.setButton(button);
-			downloadTask.setLabel(label);
-
-		} else {
-			downloadTask = new DownloadTask(dialog);
-			downloadTask.setButton(button);
-			downloadTask.setLabel(label);
-			downloadTask.execute(getResources().getText(R.string.home_url).toString());
+	@Override
+	@Deprecated
+	protected Dialog onCreateDialog(int id) {
+		if (id == DIALOG_ID) {
+			return new ProgressDialog(this);
 		}
 
-		if (AsyncTask.Status.FINISHED.equals(downloadTask.getStatus())) {
-			label.setText(R.string.home_idle);
-			button.setClickable(true);
-			button.setEnabled(true);
-			return;
+		return super.onCreateDialog(id);
+	}
+
+	@Override
+	@Deprecated
+	protected void onPrepareDialog(int id, Dialog dialog) {
+		if (id == DIALOG_ID) {
+			dialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
+				@Override
+				public void onCancel(DialogInterface dialog) {
+					downloadTask.cancel(true);
+				}
+			});
+
+			dialog.setCanceledOnTouchOutside(false);
+			dialog.setTitle(R.string.home_dialog);
 		}
 
-		button.setClickable(false);
-		button.setEnabled(false);
-		label.setText(R.string.home_downloading);
-		dialog.show();
+		super.onPrepareDialog(id, dialog);
 	}
 
 	@Override
@@ -131,29 +175,59 @@ public class HomeActivity extends Activity {
 
 	@Override
 	public Object onRetainNonConfigurationInstance() {
-		if (dialog != null) {
-			dialog.dismiss();
-			dialog = null;
-		}
-
-		downloadTask.setDialog(null);
-		downloadTask.setButton(null);
-		downloadTask.setLabel(null);
+		downloadTask.setActivity(null);
 
 		if (downloadTask != null) {
-			return downloadTask;
+			return new InstanceObjects(downloadTask, playbackTask, mediaPlayer);
 		}
 
 		return super.onRetainNonConfigurationInstance();
 	}
 
-	private class DownloadTask extends AsyncTask<String, Void, String> {
-		private ProgressDialog dialog;
-		private Button button;
-		private TextView label;
+	@Override
+	public void onSaveInstanceState(Bundle savedInstanceState) {
+		super.onSaveInstanceState(savedInstanceState);
 
-		public DownloadTask(ProgressDialog dialog) {
-			setDialog(dialog);
+		savedInstanceState.putString(PATH, path);
+		savedInstanceState.putBoolean(PLAYER_STARTED, mediaPlayerStarted);
+		savedInstanceState.putBoolean(TASK_CANCELLED, wasCancelled);
+	}
+
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+		if (!this.isChangingConfigurations()) {
+			mediaPlayer.stop();
+			mediaPlayer.release();
+		}
+
+		mediaPlayer.setOnCompletionListener(null);
+		mediaPlayer = null;
+
+		downloadTask.setActivity(null);
+		downloadTask = null;
+
+		playbackTask = null;
+	}
+
+	public void setPath(String path) {
+		this.path = path;
+	}
+
+	public void setWasCancelled(boolean wasCancelled) {
+		this.wasCancelled = wasCancelled;
+	}
+
+	private class DownloadTask extends AsyncTask<String, Void, String> {
+		private HomeActivity activity;
+
+		public DownloadTask(HomeActivity activity) {
+			setActivity(activity);
+		}
+
+		@Override
+		protected void onPreExecute() {
+			activity.showDialog(DIALOG_ID);
 		}
 
 		@Override
@@ -179,11 +253,8 @@ public class HomeActivity extends Activity {
 
 				byte data[] = new byte[4096];
 				int count;
-				int batchNum = 0;
 				while ((count = input.read(data)) != -1) {
 					if (isCancelled()) {
-						input.close();
-						output.close();
 						return null;
 					}
 					output.write(data, 0, count);
@@ -203,6 +274,13 @@ public class HomeActivity extends Activity {
 						input.close();
 					}
 				} catch (IOException ignored) {
+					if (input != null) {
+						try {
+							input.close();
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					}
 				}
 
 				if (connection != null) {
@@ -215,33 +293,31 @@ public class HomeActivity extends Activity {
 
 		@Override
 		protected void onPostExecute(String result) {
+
+			Button button = (Button) activity.findViewById(R.id.play_button);
+			TextView label = (TextView) activity.findViewById(R.id.text_view);
 			button.setClickable(true);
 			button.setEnabled(true);
 			label.setText(R.string.home_idle);
-			path = result;
 
-			dialog.dismiss();
+			activity.setPath(result);
+			activity.setWasCancelled(false);
+
+			activity.removeDialog(DIALOG_ID);
 		}
 
-		public void setDialog(ProgressDialog dialog) {
-			this.dialog = dialog;
+		@Override
+		protected void onCancelled(String result) {
+			activity.setPath(null);
+			activity.setWasCancelled(true);
 		}
 
-		public void setButton(Button button) {
-			this.button = button;
-		}
-
-		public void setLabel(TextView label) {
-			this.label = label;
+		public void setActivity(HomeActivity activity) {
+			this.activity = activity;
 		}
 	}
 
 	private class PlaybackTask extends AsyncTask<String, Void, Object> {
-		@Override
-		protected void onPreExecute() {
-
-		}
-
 		@Override
 		protected Object doInBackground(String... params) {
 			try {
@@ -266,6 +342,30 @@ public class HomeActivity extends Activity {
 			}
 
 			return null;
+		}
+	}
+
+	private class InstanceObjects {
+		private DownloadTask downloadTask;
+		private PlaybackTask playbackTask;
+		private MediaPlayer mediaPlayer;
+
+		public InstanceObjects(DownloadTask downloadTask, PlaybackTask playbackTask, MediaPlayer mediaPlayer) {
+			this.downloadTask = downloadTask;
+			this.playbackTask = playbackTask;
+			this.mediaPlayer = mediaPlayer;
+		}
+
+		public DownloadTask getDownloadTask() {
+			return downloadTask;
+		}
+
+		public PlaybackTask getPlaybackTask() {
+			return playbackTask;
+		}
+
+		public MediaPlayer getMediaPlayer() {
+			return mediaPlayer;
 		}
 	}
 }

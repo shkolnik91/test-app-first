@@ -12,5 +12,6 @@
 	<string name="home_downloading">Downloading</string>
 	<string name="home_playing">Playing</string>
 	<string name="home_url">https://upload.wikimedia.org/wikipedia/commons/f/f5/Russian_Anthem_Instrumental.ogg</string>
+	<string name="home_dialog">Downloading in progress</string>
 
 </resources>
