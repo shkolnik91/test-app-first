@@ -71,7 +71,7 @@ public class HomeActivity extends Activity {
 			downloadTask.setActivity(this);
 		}
 
-		if (AsyncTask.Status.FINISHED.equals(downloadTask.getStatus())) {
+		if ((AsyncTask.Status.FINISHED.equals(downloadTask.getStatus())) && (!wasCancelled)) {
 			label.setText(R.string.home_idle);
 			button.setClickable(true);
 			button.setEnabled(true);
@@ -293,23 +293,26 @@ public class HomeActivity extends Activity {
 
 		@Override
 		protected void onPostExecute(String result) {
+			if (activity != null) {
+				Button button = (Button) activity.findViewById(R.id.play_button);
+				TextView label = (TextView) activity.findViewById(R.id.text_view);
+				button.setClickable(true);
+				button.setEnabled(true);
+				label.setText(R.string.home_idle);
 
-			Button button = (Button) activity.findViewById(R.id.play_button);
-			TextView label = (TextView) activity.findViewById(R.id.text_view);
-			button.setClickable(true);
-			button.setEnabled(true);
-			label.setText(R.string.home_idle);
+				activity.setPath(result);
+				activity.setWasCancelled(false);
 
-			activity.setPath(result);
-			activity.setWasCancelled(false);
-
-			activity.removeDialog(DIALOG_ID);
+				activity.removeDialog(DIALOG_ID);
+			}
 		}
 
 		@Override
 		protected void onCancelled(String result) {
-			activity.setPath(null);
-			activity.setWasCancelled(true);
+			if (activity != null) {
+				activity.setPath(null);
+				activity.setWasCancelled(true);
+			}
 		}
 
 		public void setActivity(HomeActivity activity) {
