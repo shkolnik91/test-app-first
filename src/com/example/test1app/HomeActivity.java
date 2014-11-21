@@ -65,13 +65,16 @@ public class HomeActivity extends Activity {
 		}
 
 		if (downloadTask == null) {
-			downloadTask = new DownloadTask(this);
-			downloadTask.execute(getResources().getText(R.string.home_url).toString());
+			if ((path == null) || (wasCancelled)) {
+				downloadTask = new DownloadTask(this);
+
+				downloadTask.execute(getResources().getText(R.string.home_url).toString());
+			}
 		} else {
 			downloadTask.setActivity(this);
 		}
 
-		if ((AsyncTask.Status.FINISHED.equals(downloadTask.getStatus())) && (!wasCancelled)) {
+		if (((downloadTask == null) || (AsyncTask.Status.FINISHED.equals(downloadTask.getStatus()))) && (!wasCancelled)) {
 			label.setText(R.string.home_idle);
 			button.setClickable(true);
 			button.setEnabled(true);
@@ -92,15 +95,6 @@ public class HomeActivity extends Activity {
 			}
 		}
 
-		mediaPlayer.setOnCompletionListener(new OnCompletionListener() {
-			@Override
-			public void onCompletion(MediaPlayer mp) {
-				label.setText(R.string.home_idle);
-				button.setText(R.string.button_play);
-				mediaPlayerStarted = false;
-			}
-		});
-
 		button.setOnClickListener(new OnClickListener() {
 
 			@Override
@@ -110,6 +104,24 @@ public class HomeActivity extends Activity {
 				}
 			}
 
+		});
+	}
+
+	@Override
+	protected void onResume() {
+		super.onResume();
+
+		if (downloadTask != null) {
+			downloadTask.setActivity(this);
+		}
+
+		mediaPlayer.setOnCompletionListener(new OnCompletionListener() {
+			@Override
+			public void onCompletion(MediaPlayer mp) {
+				label.setText(R.string.home_idle);
+				button.setText(R.string.button_play);
+				mediaPlayerStarted = false;
+			}
 		});
 	}
 
@@ -174,14 +186,18 @@ public class HomeActivity extends Activity {
 	}
 
 	@Override
-	public Object onRetainNonConfigurationInstance() {
-		downloadTask.setActivity(null);
+	protected void onPause() {
+		super.onPause();
 
 		if (downloadTask != null) {
-			return new InstanceObjects(downloadTask, playbackTask, mediaPlayer);
+			downloadTask.setActivity(null);
 		}
+		mediaPlayer.setOnCompletionListener(null);
+	}
 
-		return super.onRetainNonConfigurationInstance();
+	@Override
+	public Object onRetainNonConfigurationInstance() {
+		return new InstanceObjects(downloadTask, playbackTask, mediaPlayer);
 	}
 
 	@Override
@@ -200,14 +216,6 @@ public class HomeActivity extends Activity {
 			mediaPlayer.stop();
 			mediaPlayer.release();
 		}
-
-		mediaPlayer.setOnCompletionListener(null);
-		mediaPlayer = null;
-
-		downloadTask.setActivity(null);
-		downloadTask = null;
-
-		playbackTask = null;
 	}
 
 	public void setPath(String path) {
@@ -228,6 +236,8 @@ public class HomeActivity extends Activity {
 		@Override
 		protected void onPreExecute() {
 			activity.showDialog(DIALOG_ID);
+
+			activity.setWasCancelled(false);
 		}
 
 		@Override
@@ -301,9 +311,8 @@ public class HomeActivity extends Activity {
 				label.setText(R.string.home_idle);
 
 				activity.setPath(result);
-				activity.setWasCancelled(false);
 
-				activity.removeDialog(DIALOG_ID);
+				activity.dismissDialog(DIALOG_ID);
 			}
 		}
 
