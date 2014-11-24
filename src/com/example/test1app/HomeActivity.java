@@ -9,8 +9,8 @@ import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 
-import android.app.Activity;
 import android.app.Dialog;
+import android.app.DialogFragment;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.media.AudioManager;
@@ -19,6 +19,7 @@ import android.media.MediaPlayer.OnCompletionListener;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.support.v7.app.ActionBarActivity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -26,11 +27,11 @@ import android.view.View.OnClickListener;
 import android.widget.Button;
 import android.widget.TextView;
 
-public class HomeActivity extends Activity {
-	private static final int DIALOG_ID = 123;
+public class HomeActivity extends ActionBarActivity {
 	private static final String PATH = "path";
 	private static final String PLAYER_STARTED = "player_started";
 	private static final String TASK_CANCELLED = "task_cancelled";
+	private static final String DIALOG = "dialog";
 
 	private String path;
 	private DownloadTask downloadTask;
@@ -56,7 +57,7 @@ public class HomeActivity extends Activity {
 		label = (TextView) findViewById(R.id.text_view);
 		label.setText(R.string.home_idle);
 
-		Object instance = getLastNonConfigurationInstance();
+		Object instance = getLastCustomNonConfigurationInstance();
 
 		if (instance instanceof InstanceObjects) {
 			downloadTask = ((InstanceObjects) instance).getDownloadTask();
@@ -107,6 +108,19 @@ public class HomeActivity extends Activity {
 		});
 	}
 
+	void showDialog() {
+		DialogFragment dialogFragment = new ProgressDialogFragment();
+		dialogFragment.show(getFragmentManager(), DIALOG);
+	}
+
+	void dismissDialog() {
+		DialogFragment dialogFragment = (DialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
+
+		if (dialogFragment != null) {
+			dialogFragment.dismiss();
+		}
+	}
+
 	@Override
 	protected void onResume() {
 		super.onResume();
@@ -123,34 +137,12 @@ public class HomeActivity extends Activity {
 				mediaPlayerStarted = false;
 			}
 		});
-	}
 
-	@Override
-	@Deprecated
-	protected Dialog onCreateDialog(int id) {
-		if (id == DIALOG_ID) {
-			return new ProgressDialog(this);
+		ProgressDialogFragment dialogFragment = (ProgressDialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
+
+		if (dialogFragment != null) {
+			dialogFragment.setDownloadTask(downloadTask);
 		}
-
-		return super.onCreateDialog(id);
-	}
-
-	@Override
-	@Deprecated
-	protected void onPrepareDialog(int id, Dialog dialog) {
-		if (id == DIALOG_ID) {
-			dialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
-				@Override
-				public void onCancel(DialogInterface dialog) {
-					downloadTask.cancel(true);
-				}
-			});
-
-			dialog.setCanceledOnTouchOutside(false);
-			dialog.setTitle(R.string.home_dialog);
-		}
-
-		super.onPrepareDialog(id, dialog);
 	}
 
 	@Override
@@ -193,10 +185,16 @@ public class HomeActivity extends Activity {
 			downloadTask.setActivity(null);
 		}
 		mediaPlayer.setOnCompletionListener(null);
+
+		ProgressDialogFragment dialogFragment = (ProgressDialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
+
+		if (dialogFragment != null) {
+			dialogFragment.setDownloadTask(null);
+		}
 	}
 
 	@Override
-	public Object onRetainNonConfigurationInstance() {
+	public Object onRetainCustomNonConfigurationInstance() {
 		return new InstanceObjects(downloadTask, playbackTask, mediaPlayer);
 	}
 
@@ -235,7 +233,7 @@ public class HomeActivity extends Activity {
 
 		@Override
 		protected void onPreExecute() {
-			activity.showDialog(DIALOG_ID);
+			activity.showDialog();
 
 			activity.setWasCancelled(false);
 		}
@@ -312,7 +310,7 @@ public class HomeActivity extends Activity {
 
 				activity.setPath(result);
 
-				activity.dismissDialog(DIALOG_ID);
+				activity.dismissDialog();
 			}
 		}
 
@@ -379,5 +377,34 @@ public class HomeActivity extends Activity {
 		public MediaPlayer getMediaPlayer() {
 			return mediaPlayer;
 		}
+	}
+
+	public static class ProgressDialogFragment extends DialogFragment {
+		private DownloadTask downloadTask;
+
+		@Override
+		public Dialog onCreateDialog(Bundle savedInstanceState)
+		{
+			ProgressDialog dialog = new ProgressDialog(getActivity(), getTheme());
+			dialog.setTitle(R.string.home_dialog);
+			dialog.setIndeterminate(true);
+			dialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+			dialog.setCanceledOnTouchOutside(false);
+			return dialog;
+		}
+
+		@Override
+		public void onCancel(DialogInterface dialog) {
+			if (downloadTask != null) {
+				downloadTask.cancel(true);
+			}
+
+			super.onCancel(dialog);
+		}
+
+		public void setDownloadTask(DownloadTask downloadTask) {
+			this.downloadTask = downloadTask;
+		}
+
 	}
 }

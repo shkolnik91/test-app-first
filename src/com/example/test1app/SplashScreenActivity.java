@@ -1,15 +1,15 @@
 package com.example.test1app;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v7.app.ActionBarActivity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
 
-public class SplashScreenActivity extends Activity {
+public class SplashScreenActivity extends ActionBarActivity {
 	private static final String GLOBAL_END = "global_end";
 	private static final long DELAY_TIME = 20000L;
 
