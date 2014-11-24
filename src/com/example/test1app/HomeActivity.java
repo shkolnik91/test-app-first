@@ -53,10 +53,6 @@ public class HomeActivity extends ActionBarActivity {
 			path = savedInstanceState.getString(PATH);
 		}
 
-		button = (Button) findViewById(R.id.play_button);
-		label = (TextView) findViewById(R.id.text_view);
-		label.setText(R.string.home_idle);
-
 		Object instance = getLastCustomNonConfigurationInstance();
 
 		if (instance instanceof InstanceObjects) {
@@ -64,6 +60,28 @@ public class HomeActivity extends ActionBarActivity {
 			playbackTask = ((InstanceObjects) instance).getPlaybackTask();
 			mediaPlayer = ((InstanceObjects) instance).getMediaPlayer();
 		}
+	}
+
+	void showDialog() {
+		DialogFragment dialogFragment = new ProgressDialogFragment();
+		dialogFragment.show(getFragmentManager(), DIALOG);
+	}
+
+	void dismissDialog() {
+		DialogFragment dialogFragment = (DialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
+
+		if (dialogFragment != null) {
+			dialogFragment.dismiss();
+		}
+	}
+
+	@Override
+	protected void onStart() {
+		super.onStart();
+
+		button = (Button) findViewById(R.id.play_button);
+		label = (TextView) findViewById(R.id.text_view);
+		label.setText(R.string.home_idle);
 
 		if (downloadTask == null) {
 			if ((path == null) || (wasCancelled)) {
@@ -79,6 +97,8 @@ public class HomeActivity extends ActionBarActivity {
 			label.setText(R.string.home_idle);
 			button.setClickable(true);
 			button.setEnabled(true);
+
+			dismissDialog();
 		} else {
 			button.setClickable(false);
 			button.setEnabled(false);
@@ -108,19 +128,6 @@ public class HomeActivity extends ActionBarActivity {
 		});
 	}
 
-	void showDialog() {
-		DialogFragment dialogFragment = new ProgressDialogFragment();
-		dialogFragment.show(getFragmentManager(), DIALOG);
-	}
-
-	void dismissDialog() {
-		DialogFragment dialogFragment = (DialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
-
-		if (dialogFragment != null) {
-			dialogFragment.dismiss();
-		}
-	}
-
 	@Override
 	protected void onResume() {
 		super.onResume();
@@ -142,6 +149,7 @@ public class HomeActivity extends ActionBarActivity {
 
 		if (dialogFragment != null) {
 			dialogFragment.setDownloadTask(downloadTask);
+			dialogFragment.setActivity(this);
 		}
 	}
 
@@ -190,6 +198,7 @@ public class HomeActivity extends ActionBarActivity {
 
 		if (dialogFragment != null) {
 			dialogFragment.setDownloadTask(null);
+			dialogFragment.setActivity(null);
 		}
 	}
 
@@ -257,6 +266,11 @@ public class HomeActivity extends ActionBarActivity {
 
 				File outputFile = new File(directory, "1.ogg");
 				filePath = outputFile.getPath();
+
+				if (activity != null) {
+					activity.setPath(filePath);
+				}
+
 				output = new FileOutputStream(outputFile);
 
 				byte data[] = new byte[4096];
@@ -381,6 +395,7 @@ public class HomeActivity extends ActionBarActivity {
 
 	public static class ProgressDialogFragment extends DialogFragment {
 		private DownloadTask downloadTask;
+		private HomeActivity activity;
 
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState)
@@ -399,6 +414,10 @@ public class HomeActivity extends ActionBarActivity {
 				downloadTask.cancel(true);
 			}
 
+			if (activity != null) {
+				activity.setWasCancelled(true);
+			}
+
 			super.onCancel(dialog);
 		}
 
@@ -406,5 +425,9 @@ public class HomeActivity extends ActionBarActivity {
 			this.downloadTask = downloadTask;
 		}
 
+
+		public void setActivity(HomeActivity activity) {
+			this.activity = activity;
+		}
 	}
 }
