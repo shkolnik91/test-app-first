@@ -149,7 +149,6 @@ public class HomeActivity extends ActionBarActivity {
 
 		if (dialogFragment != null) {
 			dialogFragment.setDownloadTask(downloadTask);
-			dialogFragment.setActivity(this);
 		}
 	}
 
@@ -198,7 +197,6 @@ public class HomeActivity extends ActionBarActivity {
 
 		if (dialogFragment != null) {
 			dialogFragment.setDownloadTask(null);
-			dialogFragment.setActivity(null);
 		}
 	}
 
@@ -277,6 +275,7 @@ public class HomeActivity extends ActionBarActivity {
 				int count;
 				while ((count = input.read(data)) != -1) {
 					if (isCancelled()) {
+						activity.setWasCancelled(true);
 						return null;
 					}
 					output.write(data, 0, count);
@@ -395,7 +394,6 @@ public class HomeActivity extends ActionBarActivity {
 
 	public static class ProgressDialogFragment extends DialogFragment {
 		private DownloadTask downloadTask;
-		private HomeActivity activity;
 
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState)
@@ -414,10 +412,6 @@ public class HomeActivity extends ActionBarActivity {
 				downloadTask.cancel(true);
 			}
 
-			if (activity != null) {
-				activity.setWasCancelled(true);
-			}
-
 			super.onCancel(dialog);
 		}
 
@@ -425,9 +419,5 @@ public class HomeActivity extends ActionBarActivity {
 			this.downloadTask = downloadTask;
 		}
 
-
-		public void setActivity(HomeActivity activity) {
-			this.activity = activity;
-		}
 	}
 }
