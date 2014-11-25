@@ -11,6 +11,8 @@ import java.net.URL;
 
 import android.app.Dialog;
 import android.app.DialogFragment;
+import android.app.Fragment;
+import android.app.FragmentTransaction;
 import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.media.AudioManager;
@@ -20,10 +22,12 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.v7.app.ActionBarActivity;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -73,6 +77,15 @@ public class HomeActivity extends ActionBarActivity {
 		if (dialogFragment != null) {
 			dialogFragment.dismiss();
 		}
+	}
+
+	void startViewFragment() {
+		TextViewFragment viewFragment = new TextViewFragment();
+
+		FragmentTransaction transaction = getFragmentManager().beginTransaction();
+
+		transaction.add(R.id.relative_layout, viewFragment);
+		transaction.commit();
 	}
 
 	@Override
@@ -324,6 +337,7 @@ public class HomeActivity extends ActionBarActivity {
 				activity.setPath(result);
 
 				activity.dismissDialog();
+				activity.startViewFragment();
 			}
 		}
 
@@ -417,6 +431,18 @@ public class HomeActivity extends ActionBarActivity {
 
 		public void setDownloadTask(DownloadTask downloadTask) {
 			this.downloadTask = downloadTask;
+		}
+
+	}
+
+	public static class TextViewFragment extends Fragment {
+
+		@Override
+		public View onCreateView(LayoutInflater inflater, ViewGroup container,
+		        Bundle savedInstanceState) {
+			TextView view = new TextView(getActivity());
+			view.setText(R.string.home_download_success);
+			return view;
 		}
 
 	}
