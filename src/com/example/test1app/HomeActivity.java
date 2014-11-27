@@ -13,15 +13,22 @@ import android.app.Dialog;
 import android.app.DialogFragment;
 import android.app.Fragment;
 import android.app.FragmentTransaction;
+import android.app.LoaderManager.LoaderCallbacks;
 import android.app.ProgressDialog;
+import android.content.AsyncTaskLoader;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Loader;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.support.v7.app.ActionBarActivity;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -31,14 +38,13 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
-public class HomeActivity extends ActionBarActivity {
+public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<String>, DialogInterface.OnCancelListener {
 	private static final String PATH = "path";
 	private static final String PLAYER_STARTED = "player_started";
 	private static final String TASK_CANCELLED = "task_cancelled";
 	private static final String DIALOG = "dialog";
 
 	private String path;
-	private DownloadTask downloadTask;
 	private PlaybackTask playbackTask;
 	private MediaPlayer mediaPlayer;
 	private boolean mediaPlayerStarted;
@@ -57,10 +63,11 @@ public class HomeActivity extends ActionBarActivity {
 			path = savedInstanceState.getString(PATH);
 		}
 
+		getLoaderManager().initLoader(0, savedInstanceState, this).forceLoad();
+
 		Object instance = getLastCustomNonConfigurationInstance();
 
 		if (instance instanceof InstanceObjects) {
-			downloadTask = ((InstanceObjects) instance).getDownloadTask();
 			playbackTask = ((InstanceObjects) instance).getPlaybackTask();
 			mediaPlayer = ((InstanceObjects) instance).getMediaPlayer();
 		}
@@ -77,6 +84,14 @@ public class HomeActivity extends ActionBarActivity {
 		if (dialogFragment != null) {
 			dialogFragment.dismiss();
 		}
+	}
+
+	@Override
+	public void onCancel(DialogInterface dialog) {
+		getLoaderManager().getLoader(0).cancelLoad();
+
+		setPath(null);
+		setWasCancelled(true);
 	}
 
 	void startViewFragment() {
@@ -96,22 +111,10 @@ public class HomeActivity extends ActionBarActivity {
 		label = (TextView) findViewById(R.id.text_view);
 		label.setText(R.string.home_idle);
 
-		if (downloadTask == null) {
-			if ((path == null) || (wasCancelled)) {
-				downloadTask = new DownloadTask(this);
-
-				downloadTask.execute(getResources().getText(R.string.home_url).toString());
-			}
-		} else {
-			downloadTask.setActivity(this);
-		}
-
-		if (((downloadTask == null) || (AsyncTask.Status.FINISHED.equals(downloadTask.getStatus()))) && (!wasCancelled)) {
+		if ((!wasCancelled)) {
 			label.setText(R.string.home_idle);
 			button.setClickable(true);
 			button.setEnabled(true);
-
-			dismissDialog();
 		} else {
 			button.setClickable(false);
 			button.setEnabled(false);
@@ -145,10 +148,6 @@ public class HomeActivity extends ActionBarActivity {
 	protected void onResume() {
 		super.onResume();
 
-		if (downloadTask != null) {
-			downloadTask.setActivity(this);
-		}
-
 		mediaPlayer.setOnCompletionListener(new OnCompletionListener() {
 			@Override
 			public void onCompletion(MediaPlayer mp) {
@@ -157,12 +156,6 @@ public class HomeActivity extends ActionBarActivity {
 				mediaPlayerStarted = false;
 			}
 		});
-
-		ProgressDialogFragment dialogFragment = (ProgressDialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
-
-		if (dialogFragment != null) {
-			dialogFragment.setDownloadTask(downloadTask);
-		}
 	}
 
 	@Override
@@ -201,21 +194,12 @@ public class HomeActivity extends ActionBarActivity {
 	protected void onPause() {
 		super.onPause();
 
-		if (downloadTask != null) {
-			downloadTask.setActivity(null);
-		}
 		mediaPlayer.setOnCompletionListener(null);
-
-		ProgressDialogFragment dialogFragment = (ProgressDialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
-
-		if (dialogFragment != null) {
-			dialogFragment.setDownloadTask(null);
-		}
 	}
 
 	@Override
 	public Object onRetainCustomNonConfigurationInstance() {
-		return new InstanceObjects(downloadTask, playbackTask, mediaPlayer);
+		return new InstanceObjects(playbackTask, mediaPlayer);
 	}
 
 	@Override
@@ -244,29 +228,47 @@ public class HomeActivity extends ActionBarActivity {
 		this.wasCancelled = wasCancelled;
 	}
 
-	private class DownloadTask extends AsyncTask<String, Void, String> {
-		private HomeActivity activity;
+	@Override
+	public Loader<String> onCreateLoader(int id, Bundle args) {
+		showDialog();
 
-		public DownloadTask(HomeActivity activity) {
-			setActivity(activity);
+		Log.v("       AAAAAAAAAAAA      ", "load created");
+		return new BackgroundLoader(this);
+	}
+
+	@Override
+	public void onLoadFinished(Loader<String> loader, String data) {
+		setPath(data);
+
+		Log.v("       AAAAAAAAAAAA      ", "load finished");
+		handler.sendEmptyMessage(0);
+	}
+
+	@Override
+	public void onLoaderReset(Loader<String> loader) {
+	}
+
+	private Handler handler = new Handler() {
+		@Override
+		public void handleMessage(Message msg) {
+			dismissDialog();
+		}
+	};
+
+	private static class BackgroundLoader extends AsyncTaskLoader<String> {
+		public BackgroundLoader(Context context) {
+			super(context);
 		}
 
 		@Override
-		protected void onPreExecute() {
-			activity.showDialog();
-
-			activity.setWasCancelled(false);
-		}
-
-		@Override
-		protected String doInBackground(String... params) {
+		public String loadInBackground() {
 			InputStream input = null;
 			OutputStream output = null;
 			HttpURLConnection connection = null;
 			String filePath = null;
 
 			try {
-				URL url = new URL(params[0]);
+				URL url = new URL("https://upload.wikimedia.org/wikipedia/commons/f/f5/Russian_Anthem_Instrumental.ogg");
 				connection = (HttpURLConnection) url.openConnection();
 				connection.connect();
 
@@ -278,19 +280,12 @@ public class HomeActivity extends ActionBarActivity {
 				File outputFile = new File(directory, "1.ogg");
 				filePath = outputFile.getPath();
 
-				if (activity != null) {
-					activity.setPath(filePath);
-				}
-
 				output = new FileOutputStream(outputFile);
 
 				byte data[] = new byte[4096];
 				int count;
 				while ((count = input.read(data)) != -1) {
-					if (isCancelled()) {
-						activity.setWasCancelled(true);
-						return null;
-					}
+					Log.v("       AAAAAAAAAAAA      ", "loading ");
 					output.write(data, 0, count);
 				}
 			} catch (MalformedURLException e) {
@@ -324,34 +319,6 @@ public class HomeActivity extends ActionBarActivity {
 
 			return filePath;
 		}
-
-		@Override
-		protected void onPostExecute(String result) {
-			if (activity != null) {
-				Button button = (Button) activity.findViewById(R.id.play_button);
-				TextView label = (TextView) activity.findViewById(R.id.text_view);
-				button.setClickable(true);
-				button.setEnabled(true);
-				label.setText(R.string.home_idle);
-
-				activity.setPath(result);
-
-				activity.dismissDialog();
-				activity.startViewFragment();
-			}
-		}
-
-		@Override
-		protected void onCancelled(String result) {
-			if (activity != null) {
-				activity.setPath(null);
-				activity.setWasCancelled(true);
-			}
-		}
-
-		public void setActivity(HomeActivity activity) {
-			this.activity = activity;
-		}
 	}
 
 	private class PlaybackTask extends AsyncTask<String, Void, Object> {
@@ -383,18 +350,14 @@ public class HomeActivity extends ActionBarActivity {
 	}
 
 	private class InstanceObjects {
-		private DownloadTask downloadTask;
+
 		private PlaybackTask playbackTask;
 		private MediaPlayer mediaPlayer;
 
-		public InstanceObjects(DownloadTask downloadTask, PlaybackTask playbackTask, MediaPlayer mediaPlayer) {
-			this.downloadTask = downloadTask;
+		public InstanceObjects(PlaybackTask playbackTask, MediaPlayer mediaPlayer) {
+
 			this.playbackTask = playbackTask;
 			this.mediaPlayer = mediaPlayer;
-		}
-
-		public DownloadTask getDownloadTask() {
-			return downloadTask;
 		}
 
 		public PlaybackTask getPlaybackTask() {
@@ -407,7 +370,6 @@ public class HomeActivity extends ActionBarActivity {
 	}
 
 	public static class ProgressDialogFragment extends DialogFragment {
-		private DownloadTask downloadTask;
 
 		@Override
 		public Dialog onCreateDialog(Bundle savedInstanceState)
@@ -419,20 +381,6 @@ public class HomeActivity extends ActionBarActivity {
 			dialog.setCanceledOnTouchOutside(false);
 			return dialog;
 		}
-
-		@Override
-		public void onCancel(DialogInterface dialog) {
-			if (downloadTask != null) {
-				downloadTask.cancel(true);
-			}
-
-			super.onCancel(dialog);
-		}
-
-		public void setDownloadTask(DownloadTask downloadTask) {
-			this.downloadTask = downloadTask;
-		}
-
 	}
 
 	public static class TextViewFragment extends Fragment {
@@ -446,4 +394,5 @@ public class HomeActivity extends ActionBarActivity {
 		}
 
 	}
+
 }
