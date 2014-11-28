@@ -28,7 +28,6 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.app.ActionBarActivity;
-import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -38,17 +37,20 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
-public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<String>, DialogInterface.OnCancelListener {
+public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<String> {
+	private static final int LOADER_ID = 1;
 	private static final String PATH = "path";
 	private static final String PLAYER_STARTED = "player_started";
 	private static final String TASK_CANCELLED = "task_cancelled";
 	private static final String DIALOG = "dialog";
+	private static final String LOADER_CREATED = "loader_created";
 
 	private String path;
 	private PlaybackTask playbackTask;
 	private MediaPlayer mediaPlayer;
 	private boolean mediaPlayerStarted;
 	private boolean wasCancelled;
+	private boolean loaderCreated;
 	private Button button;
 	private TextView label;
 
@@ -60,10 +62,15 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 		if (savedInstanceState != null) {
 			mediaPlayerStarted = savedInstanceState.getBoolean(PLAYER_STARTED);
 			wasCancelled = savedInstanceState.getBoolean(TASK_CANCELLED);
+			loaderCreated = savedInstanceState.getBoolean(LOADER_CREATED);
 			path = savedInstanceState.getString(PATH);
 		}
 
-		getLoaderManager().initLoader(0, savedInstanceState, this).forceLoad();
+		if (loaderCreated) {
+			getLoaderManager().initLoader(LOADER_ID, savedInstanceState, this);
+		} else {
+			getLoaderManager().restartLoader(LOADER_ID, savedInstanceState, this).forceLoad();
+		}
 
 		Object instance = getLastCustomNonConfigurationInstance();
 
@@ -86,14 +93,6 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 		}
 	}
 
-	@Override
-	public void onCancel(DialogInterface dialog) {
-		getLoaderManager().getLoader(0).cancelLoad();
-
-		setPath(null);
-		setWasCancelled(true);
-	}
-
 	void startViewFragment() {
 		TextViewFragment viewFragment = new TextViewFragment();
 
@@ -111,7 +110,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 		label = (TextView) findViewById(R.id.text_view);
 		label.setText(R.string.home_idle);
 
-		if ((!wasCancelled)) {
+		if ((!wasCancelled) && (path != null)) {
 			label.setText(R.string.home_idle);
 			button.setClickable(true);
 			button.setEnabled(true);
@@ -209,6 +208,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 		savedInstanceState.putString(PATH, path);
 		savedInstanceState.putBoolean(PLAYER_STARTED, mediaPlayerStarted);
 		savedInstanceState.putBoolean(TASK_CANCELLED, wasCancelled);
+		savedInstanceState.putBoolean(LOADER_CREATED, loaderCreated);
 	}
 
 	@Override
@@ -232,15 +232,13 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 	public Loader<String> onCreateLoader(int id, Bundle args) {
 		showDialog();
 
-		Log.v("       AAAAAAAAAAAA      ", "load created");
+		loaderCreated = true;
 		return new BackgroundLoader(this);
 	}
 
 	@Override
 	public void onLoadFinished(Loader<String> loader, String data) {
 		setPath(data);
-
-		Log.v("       AAAAAAAAAAAA      ", "load finished");
 		handler.sendEmptyMessage(0);
 	}
 
@@ -251,6 +249,9 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 	private Handler handler = new Handler() {
 		@Override
 		public void handleMessage(Message msg) {
+			label.setText(R.string.home_idle);
+			button.setClickable(true);
+			button.setEnabled(true);
 			dismissDialog();
 		}
 	};
@@ -285,7 +286,10 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 				byte data[] = new byte[4096];
 				int count;
 				while ((count = input.read(data)) != -1) {
-					Log.v("       AAAAAAAAAAAA      ", "loading ");
+					if (isLoadInBackgroundCanceled()) {
+						return null;
+					}
+
 					output.write(data, 0, count);
 				}
 			} catch (MalformedURLException e) {
@@ -319,6 +323,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 
 			return filePath;
 		}
+
 	}
 
 	private class PlaybackTask extends AsyncTask<String, Void, Object> {
@@ -372,14 +377,18 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 	public static class ProgressDialogFragment extends DialogFragment {
 
 		@Override
-		public Dialog onCreateDialog(Bundle savedInstanceState)
-		{
+		public Dialog onCreateDialog(Bundle savedInstanceState) {
 			ProgressDialog dialog = new ProgressDialog(getActivity(), getTheme());
 			dialog.setTitle(R.string.home_dialog);
 			dialog.setIndeterminate(true);
 			dialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
 			dialog.setCanceledOnTouchOutside(false);
 			return dialog;
+		}
+
+		@Override
+		public void onCancel(DialogInterface dialog) {
+			getActivity().getLoaderManager().getLoader(LOADER_ID).cancelLoad();
 		}
 	}
 
