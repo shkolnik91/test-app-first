@@ -28,6 +28,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.v7.app.ActionBarActivity;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -37,7 +38,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 
-public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<String> {
+public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<Object> {
 	private static final int LOADER_ID = 1;
 	private static final String PATH = "path";
 	private static final String PLAYER_STARTED = "player_started";
@@ -48,9 +49,9 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 	private String path;
 	private PlaybackTask playbackTask;
 	private MediaPlayer mediaPlayer;
-	private boolean mediaPlayerStarted;
-	private boolean wasCancelled;
-	private boolean loaderCreated;
+	private boolean mediaPlayerStarted = false;
+	private boolean wasCancelled = false;
+	private boolean loaderCreated = false;
 	private Button button;
 	private TextView label;
 
@@ -68,8 +69,16 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 
 		if (loaderCreated) {
 			getLoaderManager().initLoader(LOADER_ID, savedInstanceState, this);
+			if (getLoaderManager().getLoader(LOADER_ID).isStarted()) {
+				Log.v("     AAAAAAAAAAAAAAAAAAAAAAAAAAAA   ", " init, started ");
+				getLoaderManager().initLoader(LOADER_ID, savedInstanceState, this);
+			} else {
+				Log.v("     AAAAAAAAAAAAAAAAAAAAAAAAAAAA   ", " init, NOT started ");
+				getLoaderManager().initLoader(LOADER_ID, savedInstanceState, this).forceLoad();
+			}
 		} else {
 			getLoaderManager().restartLoader(LOADER_ID, savedInstanceState, this).forceLoad();
+			Log.v("     AAAAAAAAAAAAAAAAAAAAAAAAAAAA   ", " restart ");
 		}
 
 		Object instance = getLastCustomNonConfigurationInstance();
@@ -81,8 +90,12 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 	}
 
 	void showDialog() {
-		DialogFragment dialogFragment = new ProgressDialogFragment();
-		dialogFragment.show(getFragmentManager(), DIALOG);
+		DialogFragment dialogFragment = (DialogFragment) getFragmentManager().findFragmentByTag(DIALOG);
+
+		if (dialogFragment == null) {
+			dialogFragment = new ProgressDialogFragment();
+			dialogFragment.show(getFragmentManager(), DIALOG);
+		}
 	}
 
 	void dismissDialog() {
@@ -108,7 +121,15 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 
 		button = (Button) findViewById(R.id.play_button);
 		label = (TextView) findViewById(R.id.text_view);
-		label.setText(R.string.home_idle);
+
+		BackgroundLoader castedLoader = (BackgroundLoader) getLoaderManager().getLoader(LOADER_ID);
+		if ((castedLoader != null) && (castedLoader.isFinished())) {
+			path = castedLoader.getPath();
+			label.setText(R.string.home_idle);
+			button.setClickable(true);
+			button.setEnabled(true);
+			dismissDialog();
+		}
 
 		if ((!wasCancelled) && (path != null)) {
 			label.setText(R.string.home_idle);
@@ -229,21 +250,23 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 	}
 
 	@Override
-	public Loader<String> onCreateLoader(int id, Bundle args) {
+	public Loader<Object> onCreateLoader(int id, Bundle args) {
 		showDialog();
 
+		Log.v("     AAAAAAAAAAAAAAAAAAAAAAAAAAAA   ", " loader created ");
 		loaderCreated = true;
 		return new BackgroundLoader(this);
 	}
 
 	@Override
-	public void onLoadFinished(Loader<String> loader, String data) {
-		setPath(data);
+	public void onLoadFinished(Loader<Object> loader, Object data) {
+		setPath((String) data);
 		handler.sendEmptyMessage(0);
+		Log.v("     AAAAAAAAAAAAAAAAAAAAAAAAAAAA   ", " loading finished ");
 	}
 
 	@Override
-	public void onLoaderReset(Loader<String> loader) {
+	public void onLoaderReset(Loader<Object> loader) {
 	}
 
 	private Handler handler = new Handler() {
@@ -256,17 +279,21 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 		}
 	};
 
-	private static class BackgroundLoader extends AsyncTaskLoader<String> {
+	private static class BackgroundLoader extends AsyncTaskLoader<Object> {
+		private boolean finished = false;
+		private String filePath = null;
+
 		public BackgroundLoader(Context context) {
 			super(context);
 		}
 
 		@Override
-		public String loadInBackground() {
+		public Object loadInBackground() {
 			InputStream input = null;
 			OutputStream output = null;
 			HttpURLConnection connection = null;
-			String filePath = null;
+			filePath = null;
+			finished = false;
 
 			try {
 				URL url = new URL("https://upload.wikimedia.org/wikipedia/commons/f/f5/Russian_Anthem_Instrumental.ogg");
@@ -321,6 +348,15 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 				}
 			}
 
+			finished = true;
+			return filePath;
+		}
+
+		public boolean isFinished() {
+			return finished;
+		}
+
+		public String getPath() {
 			return filePath;
 		}
 
@@ -388,6 +424,8 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<S
 
 		@Override
 		public void onCancel(DialogInterface dialog) {
+			Log.v("     AAAAAAAAAAAAAAAAAAAAAAAAAAAA   ", " is loader started? " + getActivity().getLoaderManager().getLoader(LOADER_ID).isStarted());
+
 			getActivity().getLoaderManager().getLoader(LOADER_ID).cancelLoad();
 		}
 	}
