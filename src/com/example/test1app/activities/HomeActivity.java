@@ -86,8 +86,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 			label.setText(R.string.home_downloading);
 		}
 
-		BackgroundLoader castedLoader = (BackgroundLoader) getLoaderManager().getLoader(LOADER_ID);
-		boolean playing = castedLoader.isPlayerReady();
+		boolean playing = isPlayerPlaying();
 
 		if (playing) {
 			label.setText(R.string.home_playing);
@@ -110,14 +109,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 	protected void onResume() {
 		super.onResume();
 
-		setPlayerCompletionListener(new OnCompletionListener() {
-
-			@Override
-			public void onCompletion(MediaPlayer mp) {
-				setPlayerPlaying(false);
-				//TODO
-			}
-		});
+		setPlayerCompletionListener(true);
 	}
 
 	@Override
@@ -140,6 +132,13 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 		switchPlayer();
 
 		setPlayerPlaying(!play);
+	}
+
+	@Override
+	protected void onPause() {
+		super.onPause();
+
+		setPlayerCompletionListener(false);
 	}
 
 	@Override
@@ -180,7 +179,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 
 		if (castedLoader.isPlayerReady()) {
 			if (player.isPlaying()) {
-				player.stop();
+				player.pause();
 			} else {
 				player.start();
 			}
@@ -188,11 +187,28 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 
 	}
 
-	public void setPlayerCompletionListener(OnCompletionListener listener) {
+	public void setPlayerCompletionListener(boolean realListener) {
 		BackgroundLoader castedLoader = (BackgroundLoader) getLoaderManager().getLoader(LOADER_ID);
-		MediaPlayer player = castedLoader.getMediaPlayer();
+		final boolean ready = castedLoader.isPlayerReady();
 
-		player.setOnCompletionListener(listener);
+		if (ready) {
+			OnCompletionListener listener = null;
+
+			if (realListener) {
+				listener = new OnCompletionListener() {
+
+					@Override
+					public void onCompletion(MediaPlayer mp) {
+						setPlayerPlaying(false);
+						mp.pause();
+						mp.seekTo(0);
+					}
+				};
+			}
+
+			MediaPlayer player = castedLoader.getMediaPlayer();
+			player.setOnCompletionListener(listener);
+		}
 	}
 
 	@Override
@@ -214,6 +230,8 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 	private Handler handler = new Handler() {
 		@Override
 		public void handleMessage(Message msg) {
+			playerInitiaziled = true;
+
 			if (!isPlayerPlaying()) {
 				label.setText(R.string.home_idle);
 				button.setClickable(true);
