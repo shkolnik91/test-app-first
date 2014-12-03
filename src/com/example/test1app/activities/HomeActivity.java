@@ -1,28 +1,14 @@
 package com.example.test1app.activities;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
 
 import android.app.Dialog;
 import android.app.DialogFragment;
-import android.app.LoaderManager.LoaderCallbacks;
 import android.app.ProgressDialog;
-import android.content.Context;
 import android.content.DialogInterface;
-import android.content.Loader;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.media.MediaPlayer.OnCompletionListener;
+import android.content.Intent;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
-import android.os.Message;
+import android.os.ResultReceiver;
 import android.support.v7.app.ActionBarActivity;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -32,24 +18,55 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import com.example.test1app.R;
-import com.example.test1app.loaders.SampleLoader;
+import com.example.test1app.services.DownloadPlaybackService;
 
-public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<Object> {
-	private static final int LOADER_ID = 1;
+public class HomeActivity extends ActionBarActivity {
 	private static final String DIALOG = "dialog";
+	public static final String ACTION_KEY = "action";
+	public static final String RECEIVER_KEY = "receiver";
+	public static final String URL_KEY = "url";
+	public static final String CANCEL_VAL = "cancel";
+	public static final String START_VAL = "start";
+	public static final String SWITCH_VAL = "switch";
+	public static final String ALREADY_STARTED = "started";
+	public static final String CURRENT_DOWNLOAD = "download";
+	public static final String CURRENT_PLAYBACK = "playback";
+
 
 	private Button button;
 	private TextView label;
-	private boolean playerInitiaziled;
+	private ResultReceiver resultReceiver;
+
+	private boolean alreadyStarted;
+	private boolean currentDownload;
+	private boolean currentPlayback;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_home);
 
-		getLoaderManager().initLoader(LOADER_ID, savedInstanceState, this);
+		if (savedInstanceState != null) {
+			currentDownload = savedInstanceState.getBoolean(CURRENT_DOWNLOAD);
+			currentPlayback = savedInstanceState.getBoolean(CURRENT_PLAYBACK);
+			alreadyStarted = savedInstanceState.getBoolean(ALREADY_STARTED);
+		} else {
+			currentDownload = false;
+			currentPlayback = false;
+			alreadyStarted = false;
+		}
 
-		playerInitiaziled = ((BackgroundLoader) getLoaderManager().getLoader(LOADER_ID)).isPlayerReady();
+		if (!alreadyStarted) {
+			showDialog();
+			Intent intent = new Intent(this, DownloadPlaybackService.class);
+			intent.putExtra(ACTION_KEY, START_VAL);
+			intent.putExtra(URL_KEY, getString(R.string.home_url));
+			intent.putExtra(RECEIVER_KEY, new DownloadPlaybackReceiver(new Handler()));
+			startService(intent);
+			currentDownload = true;
+			alreadyStarted = true;
+		}
+
 	}
 
 	void showDialog() {
@@ -76,7 +93,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 		button = (Button) findViewById(R.id.play_button);
 		label = (TextView) findViewById(R.id.text_view);
 
-		if (playerInitiaziled) {
+		if (!currentDownload && !currentPlayback) {
 			label.setText(R.string.home_idle);
 			button.setClickable(true);
 			button.setEnabled(true);
@@ -86,7 +103,7 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 			label.setText(R.string.home_downloading);
 		}
 
-		boolean playing = isPlayerPlaying();
+		boolean playing = false;
 
 		if (playing) {
 			label.setText(R.string.home_playing);
@@ -98,7 +115,10 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 			@Override
 			public void onClick(View v) {
 				if (v.isEnabled()) {
-					HomeActivity.this.onClick();
+					boolean play = false;
+					switchPlayer();
+
+					setPlayerPlaying(!play);
 				}
 			}
 
@@ -108,8 +128,6 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 	@Override
 	protected void onResume() {
 		super.onResume();
-
-		setPlayerCompletionListener(true);
 	}
 
 	@Override
@@ -127,39 +145,30 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 		return super.onOptionsItemSelected(item);
 	}
 
-	private void onClick() {
-		boolean play = isPlayerPlaying();
-		switchPlayer();
-
-		setPlayerPlaying(!play);
+	@Override
+	public void onSaveInstanceState(Bundle savedInstanceState) {
+		savedInstanceState.putBoolean(CURRENT_DOWNLOAD, currentDownload);
+		savedInstanceState.putBoolean(CURRENT_PLAYBACK, currentPlayback);
+		savedInstanceState.putBoolean(ALREADY_STARTED, alreadyStarted);
+		super.onSaveInstanceState(savedInstanceState);
 	}
 
 	@Override
 	protected void onPause() {
 		super.onPause();
+	}
 
-		setPlayerCompletionListener(false);
+	@Override
+	protected void onStop() {
+		super.onStop();
+		button.setOnClickListener(null);
 	}
 
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
 		if (!this.isChangingConfigurations()) {
-			BackgroundLoader castedLoader = (BackgroundLoader) getLoaderManager().getLoader(LOADER_ID);
-			castedLoader.getMediaPlayer().stop();
-			castedLoader.getMediaPlayer().release();
-		}
-	}
 
-	public boolean isPlayerPlaying() {
-		BackgroundLoader castedLoader = (BackgroundLoader) getLoaderManager().getLoader(LOADER_ID);
-
-		if (castedLoader == null) {
-			return false;
-		} else {
-			MediaPlayer player = castedLoader.getMediaPlayer();
-
-			return ((castedLoader.isPlayerReady()) && (player.isPlaying()));
 		}
 	}
 
@@ -174,176 +183,15 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 	}
 
 	public void switchPlayer() {
-		BackgroundLoader castedLoader = (BackgroundLoader) getLoaderManager().getLoader(LOADER_ID);
-		MediaPlayer player = castedLoader.getMediaPlayer();
-
-		if (castedLoader.isPlayerReady()) {
-			if (player.isPlaying()) {
-				player.pause();
-			} else {
-				player.start();
-			}
-		}
-
+		Intent intent = new Intent(this, DownloadPlaybackService.class);
+		intent.putExtra(ACTION_KEY, SWITCH_VAL);
+		startService(intent);
 	}
 
-	public void setPlayerCompletionListener(boolean realListener) {
-		BackgroundLoader castedLoader = (BackgroundLoader) getLoaderManager().getLoader(LOADER_ID);
-		final boolean ready = castedLoader.isPlayerReady();
-
-		if (ready) {
-			OnCompletionListener listener = null;
-
-			if (realListener) {
-				listener = new OnCompletionListener() {
-
-					@Override
-					public void onCompletion(MediaPlayer mp) {
-						setPlayerPlaying(false);
-						mp.pause();
-						mp.seekTo(0);
-					}
-				};
-			}
-
-			MediaPlayer player = castedLoader.getMediaPlayer();
-			player.setOnCompletionListener(listener);
-		}
-	}
-
-	@Override
-	public Loader<Object> onCreateLoader(int id, Bundle args) {
-		showDialog();
-
-		return new BackgroundLoader(this, this.getString(R.string.home_url));
-	}
-
-	@Override
-	public void onLoadFinished(Loader<Object> loader, Object data) {
-		handler.sendEmptyMessage(0);
-	}
-
-	@Override
-	public void onLoaderReset(Loader<Object> loader) {
-	}
-
-	private Handler handler = new Handler() {
-		@Override
-		public void handleMessage(Message msg) {
-			playerInitiaziled = true;
-
-			if (!isPlayerPlaying()) {
-				label.setText(R.string.home_idle);
-				button.setClickable(true);
-				button.setEnabled(true);
-				dismissDialog();
-			}
-		}
-	};
-
-	private static class BackgroundLoader extends SampleLoader<Object> {
-		private String filePath = null;
-		private String urlString;
-		private MediaPlayer mediaPlayer;
-		private boolean ready;
-
-		public BackgroundLoader(Context context, String url) {
-			super(context);
-			this.urlString = url;
-		}
-
-		@Override
-		public Object loadInBackground() {
-			InputStream input = null;
-			OutputStream output = null;
-			HttpURLConnection connection = null;
-			filePath = null;
-			ready = false;
-
-			try {
-				URL url = new URL(urlString);
-				connection = (HttpURLConnection) url.openConnection();
-				connection.connect();
-
-				input = connection.getInputStream();
-
-				File directory = new File(Environment.getExternalStorageDirectory() + "/");
-				directory.mkdirs();
-
-				File outputFile = new File(directory, "1.ogg");
-				filePath = outputFile.getPath();
-
-				output = new FileOutputStream(outputFile);
-
-				byte data[] = new byte[4096];
-				int count;
-				while ((count = input.read(data)) != -1) {
-					if (isLoadInBackgroundCanceled()) {
-						return null;
-					}
-
-					output.write(data, 0, count);
-				}
-			} catch (MalformedURLException e) {
-				e.printStackTrace();
-				return null;
-			} catch (IOException e) {
-				e.printStackTrace();
-				return null;
-			} finally {
-				try {
-					if (output != null) {
-						output.close();
-					}
-					if (input != null) {
-						input.close();
-					}
-				} catch (IOException ignored) {
-					if (input != null) {
-						try {
-							input.close();
-						} catch (IOException e) {
-							e.printStackTrace();
-						}
-					}
-				}
-
-				if (connection != null) {
-					connection.disconnect();
-				}
-			}
-
-			try {
-				mediaPlayer = new MediaPlayer();
-				mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-
-				mediaPlayer.setDataSource(filePath);
-				mediaPlayer.prepare();
-			} catch (IllegalArgumentException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (SecurityException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IllegalStateException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
-
-			ready = true;
-			return filePath;
-		}
-
-		public MediaPlayer getMediaPlayer() {
-			return mediaPlayer;
-		}
-
-		public boolean isPlayerReady() {
-			return ready;
-		}
+	public void cancelDownload() {
+		Intent intent = new Intent(this, DownloadPlaybackService.class);
+		intent.putExtra(ACTION_KEY, CANCEL_VAL);
+		startService(intent);
 	}
 
 	public static class ProgressDialogFragment extends DialogFragment {
@@ -360,7 +208,22 @@ public class HomeActivity extends ActionBarActivity implements LoaderCallbacks<O
 
 		@Override
 		public void onCancel(DialogInterface dialog) {
-			getActivity().getLoaderManager().getLoader(LOADER_ID).cancelLoad();
+			((HomeActivity) getActivity()).cancelDownload();
+		}
+	}
+
+	private class DownloadPlaybackReceiver extends ResultReceiver {
+		
+		
+		public DownloadPlaybackReceiver(Handler handler) {
+			super(handler);
+		}
+
+		@Override
+		protected void onReceiveResult(int resultCode, Bundle resultData) {
+			super.onReceiveResult(resultCode, resultData);
+			dismissDialog();
+			currentDownload = false;
 		}
 	}
 }
