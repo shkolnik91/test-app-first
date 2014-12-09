@@ -2,9 +2,9 @@ package com.example.test1app.services;
 
 import java.io.IOException;
 
-import android.app.IntentService;
 import android.app.Notification;
 import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Intent;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -16,16 +16,11 @@ import android.support.v4.content.LocalBroadcastManager;
 import com.example.test1app.R;
 import com.example.test1app.activities.HomeActivity;
 
-public class PlaybackService extends IntentService {
-	private static final String NAME = "PlaybackService";
+public class PlaybackService extends Service {
 	private static final int ID = 181;
 
 	private MediaPlayer mediaPlayer;
 	private String filePath;
-
-	public PlaybackService() {
-		super(NAME);
-	}
 
 	private final IBinder binder = new PlaybackServiceBinder();
 
@@ -35,7 +30,7 @@ public class PlaybackService extends IntentService {
 	}
 
 	@Override
-	protected void onHandleIntent(Intent intent) {
+	public int onStartCommand(Intent intent, int flags, int startId) {
 		Intent notificationIntent = new Intent(this, HomeActivity.class);
 		PendingIntent pendingIntent = PendingIntent.getActivity(getApplicationContext(), 0, notificationIntent, 0);
 
@@ -83,6 +78,7 @@ public class PlaybackService extends IntentService {
 			e.printStackTrace();
 		}
 
+		return super.onStartCommand(notificationIntent, flags, startId);
 	}
 
 	public boolean switchPlayer() {

@@ -81,9 +81,10 @@ public class HomeActivity extends ActionBarActivity {
 			alreadyStarted = true;
 		}
 
-		Intent playbackIntent = new Intent(this, PlaybackService.class);
-
 		bindService(downloadIntent, downloadConnection, Context.BIND_AUTO_CREATE);
+
+		Intent playbackIntent = new Intent(HomeActivity.this, PlaybackService.class);
+
 		bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
 
 		LocalBroadcastManager.getInstance(this).registerReceiver(intentReceiver, new IntentFilter(DOWNLOAD_SERVICE_INTENT));
@@ -142,7 +143,7 @@ public class HomeActivity extends ActionBarActivity {
 						} else {
 							playbackIntent.putExtra(PATH_KEY, filePath);
 
-							//bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
+							bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
 							startService(playbackIntent);
 
 							playerStarted = true;
