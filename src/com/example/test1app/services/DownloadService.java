@@ -11,35 +11,29 @@ import java.net.URL;
 
 import android.app.IntentService;
 import android.content.Intent;
-import android.media.AudioManager;
-import android.media.MediaPlayer;
-import android.os.Bundle;
+import android.os.Binder;
 import android.os.Environment;
-import android.os.ResultReceiver;
+import android.os.IBinder;
+import android.support.v4.content.LocalBroadcastManager;
 
 import com.example.test1app.activities.HomeActivity;
 
-public class DownloadPlaybackService extends IntentService {
-	private static final String NAME = "DownloadPlaybackService";
+public class DownloadService extends IntentService {
+	private static final String NAME = "DownloadService";
 
 	private boolean cancelled;
 	private boolean alreadyStarted = false;
-	private MediaPlayer mediaPlayer;
+	private String filePath = null;
 
-	public DownloadPlaybackService() {
+	private final IBinder binder = new DownloadServiceBinder();
+
+	public DownloadService() {
 		super(NAME);
-		// TODO Auto-generated constructor stub
 	}
 
 	@Override
-	public int onStartCommand(Intent intent, int flags, int startId) {
-
-		if (intent.hasExtra(HomeActivity.ACTION_KEY)) {
-			// Set the canceling flag
-			cancelled = HomeActivity.CANCEL_VAL.equals(intent.getStringExtra(HomeActivity.ACTION_KEY));
-
-		}
-		return super.onStartCommand(intent, flags, startId);
+	public IBinder onBind(Intent intent) {
+		return binder;
 	}
 
 	@Override
@@ -47,13 +41,10 @@ public class DownloadPlaybackService extends IntentService {
 		InputStream input = null;
 		OutputStream output = null;
 		HttpURLConnection connection = null;
-		String filePath = null;
-		boolean ready = false;
+
 		String urlString = intent.getStringExtra(HomeActivity.URL_KEY);
-		ResultReceiver receiver = (ResultReceiver) intent.getParcelableExtra(HomeActivity.RECEIVER_KEY);
 
 		if (!alreadyStarted) {
-
 			try {
 				alreadyStarted = true;
 				URL url = new URL(urlString);
@@ -106,28 +97,22 @@ public class DownloadPlaybackService extends IntentService {
 				}
 			}
 
-			try {
-				mediaPlayer = new MediaPlayer();
-				mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-
-				mediaPlayer.setDataSource(filePath);
-				mediaPlayer.prepare();
-			} catch (IllegalArgumentException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (SecurityException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IllegalStateException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+			if (!cancelled) {
+				Intent outerIntent = new Intent(HomeActivity.DOWNLOAD_SERVICE_INTENT);
+				outerIntent.putExtra(HomeActivity.SERVICE_MESSAGE, HomeActivity.DOWNLOAD_FINISHED);
+				outerIntent.putExtra(HomeActivity.PATH_KEY, filePath);
+				LocalBroadcastManager.getInstance(this).sendBroadcast(outerIntent);
 			}
+		}
+	}
 
-			ready = true;
-			receiver.send(0, new Bundle());
+	public void cancelLoad() {
+		cancelled = true;
+	}
+
+	public class DownloadServiceBinder extends Binder {
+		public DownloadService getService() {
+			return DownloadService.this;
 		}
 	}
 }

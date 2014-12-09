@@ -1,14 +1,18 @@
 package com.example.test1app.activities;
 
-
 import android.app.Dialog;
 import android.app.DialogFragment;
 import android.app.ProgressDialog;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.ResultReceiver;
+import android.os.IBinder;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v7.app.ActionBarActivity;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -18,28 +22,37 @@ import android.widget.Button;
 import android.widget.TextView;
 
 import com.example.test1app.R;
-import com.example.test1app.services.DownloadPlaybackService;
+import com.example.test1app.services.DownloadService;
+import com.example.test1app.services.DownloadService.DownloadServiceBinder;
+import com.example.test1app.services.PlaybackService;
+import com.example.test1app.services.PlaybackService.PlaybackServiceBinder;
 
 public class HomeActivity extends ActionBarActivity {
 	private static final String DIALOG = "dialog";
-	public static final String ACTION_KEY = "action";
+	public static final String PATH_KEY = "path";
 	public static final String RECEIVER_KEY = "receiver";
 	public static final String URL_KEY = "url";
-	public static final String CANCEL_VAL = "cancel";
-	public static final String START_VAL = "start";
-	public static final String SWITCH_VAL = "switch";
 	public static final String ALREADY_STARTED = "started";
 	public static final String CURRENT_DOWNLOAD = "download";
 	public static final String CURRENT_PLAYBACK = "playback";
-
+	public static final String DOWNLOAD_FINISHED = "download finished";
+	public static final String PLAYBACK_FINISHED = "playback finished";
+	public static final String PLAYER_STARTED = "player started"; //????
+	public static final String SERVICE_MESSAGE = "service message";
+	public static final String DOWNLOAD_SERVICE_INTENT = "download service";
+	public static final String PLAYBACK_SERVICE_INTENT = "playback service";
 
 	private Button button;
 	private TextView label;
-	private ResultReceiver resultReceiver;
+	private String filePath;
 
 	private boolean alreadyStarted;
 	private boolean currentDownload;
 	private boolean currentPlayback;
+	private boolean playerStarted;
+
+	private DownloadService downloadService = null;
+	private PlaybackService playbackService = null;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -50,23 +63,30 @@ public class HomeActivity extends ActionBarActivity {
 			currentDownload = savedInstanceState.getBoolean(CURRENT_DOWNLOAD);
 			currentPlayback = savedInstanceState.getBoolean(CURRENT_PLAYBACK);
 			alreadyStarted = savedInstanceState.getBoolean(ALREADY_STARTED);
+			filePath = savedInstanceState.getString(PATH_KEY);
+			playerStarted = savedInstanceState.getBoolean(PLAYER_STARTED);
 		} else {
 			currentDownload = false;
 			currentPlayback = false;
 			alreadyStarted = false;
+			playerStarted = false;
 		}
 
+		Intent downloadIntent = new Intent(this, DownloadService.class);
 		if (!alreadyStarted) {
 			showDialog();
-			Intent intent = new Intent(this, DownloadPlaybackService.class);
-			intent.putExtra(ACTION_KEY, START_VAL);
-			intent.putExtra(URL_KEY, getString(R.string.home_url));
-			intent.putExtra(RECEIVER_KEY, new DownloadPlaybackReceiver(new Handler()));
-			startService(intent);
+			downloadIntent.putExtra(URL_KEY, getString(R.string.home_url));
+			startService(downloadIntent);
 			currentDownload = true;
 			alreadyStarted = true;
 		}
 
+		Intent playbackIntent = new Intent(this, PlaybackService.class);
+
+		bindService(downloadIntent, downloadConnection, Context.BIND_AUTO_CREATE);
+		bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
+
+		LocalBroadcastManager.getInstance(this).registerReceiver(intentReceiver, new IntentFilter(DOWNLOAD_SERVICE_INTENT));
 	}
 
 	void showDialog() {
@@ -103,11 +123,11 @@ public class HomeActivity extends ActionBarActivity {
 			label.setText(R.string.home_downloading);
 		}
 
-		boolean playing = false;
-
-		if (playing) {
+		if (currentPlayback) {
 			label.setText(R.string.home_playing);
 			button.setText(R.string.button_pause);
+			button.setClickable(true);
+			button.setEnabled(true);
 		}
 
 		button.setOnClickListener(new OnClickListener() {
@@ -115,10 +135,21 @@ public class HomeActivity extends ActionBarActivity {
 			@Override
 			public void onClick(View v) {
 				if (v.isEnabled()) {
-					boolean play = false;
-					switchPlayer();
+					Intent playbackIntent = new Intent(HomeActivity.this, PlaybackService.class);
+					if (filePath != null) {
+						if (playerStarted) {
+							switchPlayer();
+						} else {
+							playbackIntent.putExtra(PATH_KEY, filePath);
 
-					setPlayerPlaying(!play);
+							//bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
+							startService(playbackIntent);
+
+							playerStarted = true;
+							currentPlayback = true;
+						}
+					}
+					setPlayerPlaying(currentPlayback);
 				}
 			}
 
@@ -150,6 +181,8 @@ public class HomeActivity extends ActionBarActivity {
 		savedInstanceState.putBoolean(CURRENT_DOWNLOAD, currentDownload);
 		savedInstanceState.putBoolean(CURRENT_PLAYBACK, currentPlayback);
 		savedInstanceState.putBoolean(ALREADY_STARTED, alreadyStarted);
+		savedInstanceState.putString(PATH_KEY, filePath);
+		savedInstanceState.putBoolean(PLAYER_STARTED, playerStarted);
 		super.onSaveInstanceState(savedInstanceState);
 	}
 
@@ -166,10 +199,10 @@ public class HomeActivity extends ActionBarActivity {
 
 	@Override
 	protected void onDestroy() {
+		unbindService(downloadConnection);
+		unbindService(playbackConnection);
+		LocalBroadcastManager.getInstance(this).unregisterReceiver(intentReceiver);
 		super.onDestroy();
-		if (!this.isChangingConfigurations()) {
-
-		}
 	}
 
 	public void setPlayerPlaying(boolean playerPlaying) {
@@ -183,15 +216,15 @@ public class HomeActivity extends ActionBarActivity {
 	}
 
 	public void switchPlayer() {
-		Intent intent = new Intent(this, DownloadPlaybackService.class);
-		intent.putExtra(ACTION_KEY, SWITCH_VAL);
-		startService(intent);
+		if (playbackService != null) {
+			currentPlayback = playbackService.switchPlayer();
+		}
 	}
 
 	public void cancelDownload() {
-		Intent intent = new Intent(this, DownloadPlaybackService.class);
-		intent.putExtra(ACTION_KEY, CANCEL_VAL);
-		startService(intent);
+		if (downloadService != null) {
+			downloadService.cancelLoad();
+		}
 	}
 
 	public static class ProgressDialogFragment extends DialogFragment {
@@ -212,18 +245,50 @@ public class HomeActivity extends ActionBarActivity {
 		}
 	}
 
-	private class DownloadPlaybackReceiver extends ResultReceiver {
-		
-		
-		public DownloadPlaybackReceiver(Handler handler) {
-			super(handler);
+	private BroadcastReceiver intentReceiver = new BroadcastReceiver() {
+		@Override
+		public void onReceive(Context context, Intent intent) {
+			String message = intent.getStringExtra(SERVICE_MESSAGE);
+
+			if (DOWNLOAD_FINISHED.equals(message)) {
+				filePath = intent.getStringExtra(PATH_KEY);
+				dismissDialog();
+				currentDownload = false;
+
+				label.setText(R.string.home_idle);
+				button.setClickable(true);
+				button.setEnabled(true);
+			} else if (PLAYBACK_FINISHED.equals(message)) {
+				//TODO
+			}
+		}
+	};
+
+	private ServiceConnection downloadConnection = new ServiceConnection() {
+
+		@Override
+		public void onServiceConnected(ComponentName className, IBinder service) {
+			DownloadServiceBinder binder = (DownloadServiceBinder) service;
+			downloadService = binder.getService();
 		}
 
 		@Override
-		protected void onReceiveResult(int resultCode, Bundle resultData) {
-			super.onReceiveResult(resultCode, resultData);
-			dismissDialog();
-			currentDownload = false;
+		public void onServiceDisconnected(ComponentName arg0) {
+			downloadService = null;
 		}
-	}
+	};
+
+	private ServiceConnection playbackConnection = new ServiceConnection() {
+
+		@Override
+		public void onServiceConnected(ComponentName className, IBinder service) {
+			PlaybackServiceBinder binder = (PlaybackServiceBinder) service;
+			playbackService = binder.getService();
+		}
+
+		@Override
+		public void onServiceDisconnected(ComponentName arg0) {
+			playbackService = null;
+		}
+	};
 }
