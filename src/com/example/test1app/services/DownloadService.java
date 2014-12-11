@@ -23,6 +23,7 @@ public class DownloadService extends IntentService {
 
 	private boolean cancelled;
 	private boolean alreadyStarted = false;
+	private boolean finished = false;
 	private String filePath = null;
 
 	private final IBinder binder = new DownloadServiceBinder();
@@ -95,6 +96,7 @@ public class DownloadService extends IntentService {
 				if (connection != null) {
 					connection.disconnect();
 				}
+
 			}
 
 			if (!cancelled) {
@@ -102,12 +104,21 @@ public class DownloadService extends IntentService {
 				outerIntent.putExtra(HomeActivity.SERVICE_MESSAGE, HomeActivity.DOWNLOAD_FINISHED);
 				outerIntent.putExtra(HomeActivity.PATH_KEY, filePath);
 				LocalBroadcastManager.getInstance(this).sendBroadcast(outerIntent);
+				finished = true;
 			}
 		}
 	}
 
 	public void cancelLoad() {
 		cancelled = true;
+	}
+
+	public boolean isStarted() {
+		return alreadyStarted;
+	}
+
+	public boolean isFinished() {
+		return finished;
 	}
 
 	public class DownloadServiceBinder extends Binder {

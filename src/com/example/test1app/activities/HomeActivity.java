@@ -51,6 +51,8 @@ public class HomeActivity extends ActionBarActivity {
 	private boolean currentPlayback;
 	private boolean playerStarted;
 
+	private Intent downloadIntent;
+
 	private DownloadService downloadService = null;
 	private PlaybackService playbackService = null;
 
@@ -59,33 +61,11 @@ public class HomeActivity extends ActionBarActivity {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_home);
 
-		if (savedInstanceState != null) {
-			currentDownload = savedInstanceState.getBoolean(CURRENT_DOWNLOAD);
-			currentPlayback = savedInstanceState.getBoolean(CURRENT_PLAYBACK);
-			alreadyStarted = savedInstanceState.getBoolean(ALREADY_STARTED);
-			filePath = savedInstanceState.getString(PATH_KEY);
-			playerStarted = savedInstanceState.getBoolean(PLAYER_STARTED);
-		} else {
-			currentDownload = false;
-			currentPlayback = false;
-			alreadyStarted = false;
-			playerStarted = false;
-		}
-
-		Intent downloadIntent = new Intent(this, DownloadService.class);
-		if (!alreadyStarted) {
-			showDialog();
-			downloadIntent.putExtra(URL_KEY, getString(R.string.home_url));
-			startService(downloadIntent);
-			currentDownload = true;
-			alreadyStarted = true;
-		}
-
-		bindService(downloadIntent, downloadConnection, Context.BIND_AUTO_CREATE);
-
 		Intent playbackIntent = new Intent(HomeActivity.this, PlaybackService.class);
+		bindService(playbackIntent, playbackConnection, 0);
 
-		bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
+		downloadIntent = new Intent(this, DownloadService.class);
+		bindService(downloadIntent, downloadConnection, Context.BIND_AUTO_CREATE);
 
 		LocalBroadcastManager.getInstance(this).registerReceiver(intentReceiver, new IntentFilter(DOWNLOAD_SERVICE_INTENT));
 	}
@@ -137,19 +117,18 @@ public class HomeActivity extends ActionBarActivity {
 			public void onClick(View v) {
 				if (v.isEnabled()) {
 					Intent playbackIntent = new Intent(HomeActivity.this, PlaybackService.class);
-					if (filePath != null) {
-						if (playerStarted) {
-							switchPlayer();
-						} else {
-							playbackIntent.putExtra(PATH_KEY, filePath);
+					if ((playerStarted) || playbackService != null) {
+						switchPlayer();
+					} else {
+						playbackIntent.putExtra(PATH_KEY, filePath);
 
-							bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
-							startService(playbackIntent);
+						bindService(playbackIntent, playbackConnection, Context.BIND_AUTO_CREATE);
+						startService(playbackIntent);
 
-							playerStarted = true;
-							currentPlayback = true;
-						}
+						playerStarted = true;
+						currentPlayback = true;
 					}
+
 					setPlayerPlaying(currentPlayback);
 				}
 			}
@@ -200,8 +179,14 @@ public class HomeActivity extends ActionBarActivity {
 
 	@Override
 	protected void onDestroy() {
-		unbindService(downloadConnection);
-		unbindService(playbackConnection);
+		if (downloadConnection != null) {
+			unbindService(downloadConnection);
+		}
+
+		if (playbackConnection != null) {
+			unbindService(playbackConnection);
+		}
+
 		LocalBroadcastManager.getInstance(this).unregisterReceiver(intentReceiver);
 		super.onDestroy();
 	}
@@ -271,6 +256,16 @@ public class HomeActivity extends ActionBarActivity {
 		public void onServiceConnected(ComponentName className, IBinder service) {
 			DownloadServiceBinder binder = (DownloadServiceBinder) service;
 			downloadService = binder.getService();
+			if ((!downloadService.isStarted()) && (!alreadyStarted)) {
+				showDialog();
+				downloadIntent.putExtra(URL_KEY, getString(R.string.home_url));
+				startService(downloadIntent);
+				currentDownload = true;
+				alreadyStarted = true;
+			} else if (!downloadService.isFinished()) {
+				currentDownload = true;
+
+			}
 		}
 
 		@Override
@@ -285,6 +280,14 @@ public class HomeActivity extends ActionBarActivity {
 		public void onServiceConnected(ComponentName className, IBinder service) {
 			PlaybackServiceBinder binder = (PlaybackServiceBinder) service;
 			playbackService = binder.getService();
+
+			if (playbackService != null) {
+				currentPlayback = playbackService.isPlaying();
+				alreadyStarted = true;
+				playerStarted = true;
+
+				setPlayerPlaying(currentPlayback);
+			}
 		}
 
 		@Override

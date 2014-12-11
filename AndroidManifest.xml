@@ -30,8 +30,7 @@
 		</activity>
 		<activity
 			android:name="com.example.test1app.activities.HomeActivity"
-			android:label="@string/title_activity_home"
-			android:launchMode="singleInstance" >
+			android:label="@string/title_activity_home" >
 			<intent-filter>
 				<action android:name="android.intent.action.MAIN" />
 			</intent-filter>

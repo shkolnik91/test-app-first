@@ -12,6 +12,7 @@ import android.media.MediaPlayer.OnCompletionListener;
 import android.os.Binder;
 import android.os.IBinder;
 import android.support.v4.content.LocalBroadcastManager;
+import android.util.Log;
 
 import com.example.test1app.R;
 import com.example.test1app.activities.HomeActivity;
@@ -31,8 +32,13 @@ public class PlaybackService extends Service {
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
-		Intent notificationIntent = new Intent(this, HomeActivity.class);
-		PendingIntent pendingIntent = PendingIntent.getActivity(getApplicationContext(), 0, notificationIntent, 0);
+		Intent notificationIntent = new Intent(Intent.ACTION_MAIN);
+		notificationIntent.setClass(getApplicationContext(), HomeActivity.class);
+		notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+		Log.v("  BBBBBBBBBBBBBBBBBBB ", startId + "");
+
+		PendingIntent pendingIntent = PendingIntent.getActivity(this, startId, notificationIntent, 0);
 
 		Notification notification = new Notification.Builder(this)
 		        .setContentTitle(getString(R.string.media_player_started))
@@ -42,43 +48,45 @@ public class PlaybackService extends Service {
 		        .build();
 
 		startForeground(ID, notification);
-		filePath = intent.getStringExtra(HomeActivity.PATH_KEY);
-		try {
-			mediaPlayer = new MediaPlayer();
-			mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
 
-			mediaPlayer.setDataSource(filePath);
-			mediaPlayer.prepare();
+		if (intent != null) {
+			filePath = intent.getStringExtra(HomeActivity.PATH_KEY);
+			try {
+				mediaPlayer = new MediaPlayer();
+				mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
 
-			mediaPlayer.setOnCompletionListener(new OnCompletionListener() {
+				mediaPlayer.setDataSource(filePath);
+				mediaPlayer.prepare();
 
-				@Override
-				public void onCompletion(MediaPlayer mp) {
-					mp.pause();
-					mp.seekTo(0);
+				mediaPlayer.setOnCompletionListener(new OnCompletionListener() {
 
-					Intent outerIntent = new Intent(HomeActivity.PLAYBACK_SERVICE_INTENT);
-					outerIntent.putExtra(HomeActivity.SERVICE_MESSAGE, HomeActivity.PLAYBACK_FINISHED);
-					LocalBroadcastManager.getInstance(PlaybackService.this).sendBroadcast(outerIntent);
-				}
-			});
+					@Override
+					public void onCompletion(MediaPlayer mp) {
+						mp.pause();
+						mp.seekTo(0);
 
-			mediaPlayer.start();
-		} catch (IllegalArgumentException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (SecurityException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IllegalStateException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+						Intent outerIntent = new Intent(HomeActivity.PLAYBACK_SERVICE_INTENT);
+						outerIntent.putExtra(HomeActivity.SERVICE_MESSAGE, HomeActivity.PLAYBACK_FINISHED);
+						LocalBroadcastManager.getInstance(PlaybackService.this).sendBroadcast(outerIntent);
+					}
+				});
+
+				mediaPlayer.start();
+			} catch (IllegalArgumentException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (SecurityException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IllegalStateException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 		}
-
-		return super.onStartCommand(notificationIntent, flags, startId);
+		return START_NOT_STICKY;
 	}
 
 	public boolean switchPlayer() {
@@ -88,6 +96,10 @@ public class PlaybackService extends Service {
 			mediaPlayer.start();
 		}
 
+		return mediaPlayer.isPlaying();
+	}
+
+	public boolean isPlaying() {
 		return mediaPlayer.isPlaying();
 	}
 
