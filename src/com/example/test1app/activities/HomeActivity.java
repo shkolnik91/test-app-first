@@ -37,7 +37,7 @@ public class HomeActivity extends ActionBarActivity {
 	public static final String CURRENT_PLAYBACK = "playback";
 	public static final String DOWNLOAD_FINISHED = "download finished";
 	public static final String PLAYBACK_FINISHED = "playback finished";
-	public static final String PLAYER_STARTED = "player started"; //????
+	public static final String PLAYER_STARTED = "player started";
 	public static final String SERVICE_MESSAGE = "service message";
 	public static final String DOWNLOAD_SERVICE_INTENT = "download service";
 	public static final String PLAYBACK_SERVICE_INTENT = "playback service";
@@ -60,6 +60,14 @@ public class HomeActivity extends ActionBarActivity {
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_home);
+
+		if (savedInstanceState != null) {
+			alreadyStarted = savedInstanceState.getBoolean(ALREADY_STARTED);
+			currentDownload = savedInstanceState.getBoolean(CURRENT_DOWNLOAD);
+			currentPlayback = savedInstanceState.getBoolean(CURRENT_PLAYBACK);
+			filePath = savedInstanceState.getString(PATH_KEY);
+			playerStarted = savedInstanceState.getBoolean(PLAYER_STARTED);
+		}
 
 		Intent playbackIntent = new Intent(HomeActivity.this, PlaybackService.class);
 		bindService(playbackIntent, playbackConnection, 0);
@@ -93,23 +101,6 @@ public class HomeActivity extends ActionBarActivity {
 
 		button = (Button) findViewById(R.id.play_button);
 		label = (TextView) findViewById(R.id.text_view);
-
-		if (!currentDownload && !currentPlayback) {
-			label.setText(R.string.home_idle);
-			button.setClickable(true);
-			button.setEnabled(true);
-		} else {
-			button.setClickable(false);
-			button.setEnabled(false);
-			label.setText(R.string.home_downloading);
-		}
-
-		if (currentPlayback) {
-			label.setText(R.string.home_playing);
-			button.setText(R.string.button_pause);
-			button.setClickable(true);
-			button.setEnabled(true);
-		}
 
 		button.setOnClickListener(new OnClickListener() {
 
@@ -240,12 +231,12 @@ public class HomeActivity extends ActionBarActivity {
 				filePath = intent.getStringExtra(PATH_KEY);
 				dismissDialog();
 				currentDownload = false;
-
+				alreadyStarted = true;
 				label.setText(R.string.home_idle);
 				button.setClickable(true);
 				button.setEnabled(true);
 			} else if (PLAYBACK_FINISHED.equals(message)) {
-				//TODO
+				setPlayerPlaying(false);
 			}
 		}
 	};
@@ -264,6 +255,25 @@ public class HomeActivity extends ActionBarActivity {
 				alreadyStarted = true;
 			} else if (!downloadService.isFinished()) {
 				currentDownload = true;
+
+			}
+
+			button.setClickable(false);
+			button.setEnabled(false);
+			label.setText(R.string.home_downloading);
+
+			if ((filePath != null) || (playerStarted)) {
+				if (currentPlayback) {
+					label.setText(R.string.home_playing);
+					button.setText(R.string.button_pause);
+					button.setClickable(true);
+					button.setEnabled(true);
+				} else {
+					label.setText(R.string.home_idle);
+					button.setText(R.string.button_play);
+					button.setClickable(true);
+					button.setEnabled(true);
+				}
 
 			}
 		}
